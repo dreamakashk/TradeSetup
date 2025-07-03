@@ -5,9 +5,10 @@ from datetime import datetime
 import ScriptDataFetcher  # Assuming ScriptDataFetcher.py is in the same directory or in PYTHONPATH
 import FileHandler
 
-def sync_nifty_scripts_data(data_dir, csv_file):
+def sync_nifty_scripts_data(data_dir, csv_file, db_table=None):
     symbols = FileHandler.read_nifty_symbols(csv_file)
     print(f"Total symbols: {len(symbols)}")
+    from PostgresWriter import upsert_stock_data
 
     for symbol in symbols:
         if FileHandler.check_symbol_file_exists(symbol, data_dir):
@@ -18,6 +19,10 @@ def sync_nifty_scripts_data(data_dir, csv_file):
                 data = ScriptDataFetcher.fetch_historical_data(symbol)
                 if data is not None and not data.empty:
                     FileHandler.save_data_to_csv(data, symbol, data_dir)
+                    if db_table:
+                        # Reset index to ensure 'Date' is a column
+                        data = data.reset_index()
+                        upsert_stock_data(data, db_table, symbol)
                 else:
                     print(f"No data found for {symbol}")
             except Exception as e:
@@ -46,7 +51,7 @@ def fetch_multiple_historical_data(symbols, directory, retries=3, delay=60):
                     print(f"Failed to fetch data for {symbol}: {e}")
                     break
 
-def sync_symbol_data(symbol, data_dir):
+def sync_symbol_data(symbol, data_dir, db_table=None):
     """
     Update the CSV for the given symbol in data_dir with the latest historical data.
     """
@@ -105,6 +110,9 @@ def sync_symbol_data(symbol, data_dir):
         updated_df = pd.concat([df, new_data], ignore_index=True)
         updated_df.to_csv(csv_path, index=False)
         print(f"{symbol}: Appended {len(new_data)} new rows to CSV.")
+        if db_table:
+            from PostgresWriter import upsert_stock_data
+            upsert_stock_data(new_data, db_table, symbol)
     else:
         print(f"{symbol}: No new rows to append.")
 
@@ -112,6 +120,8 @@ def sync_symbol_data(symbol, data_dir):
         print(alert.strip())
 
 if __name__ == "__main__":
-    data_dir = r"C:\Users\akashkatare\Src\TradeSetup\data"
-    csv_file = os.path.join(os.path.dirname(__file__), "niftytotalmarket_list.csv")
-    sync_nifty_scripts_data(data_dir, csv_file)
+    data_dir = r"/home/shared/Src/VSWorkspace/TraderSetup/TradeSetup/data"
+    # csv_file = os.path.join(os.path.dirname(__file__), "niftytotalmarket_list.csv")
+    csv_file = r"/home/shared/Src/VSWorkspace/TraderSetup/TradeSetup/sources/niftytotalmarket_list.csv"  # Update with your actual path
+    db_table = "stock_prices"  # Change to your actual table name
+    sync_nifty_scripts_data(data_dir, csv_file, db_table=db_table)
