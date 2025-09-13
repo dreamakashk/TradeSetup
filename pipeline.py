@@ -95,10 +95,9 @@ def handle_stock_operations(args, config):
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
-    from main import (
-        process_single_symbol, sync_all_nifty_symbols, 
-        sync_single_symbol, cron_incremental_update
-    )
+    # Import functions from main.py
+    sys.path.append('.')
+    import main
     import FileHandler
     
     try:
@@ -111,7 +110,7 @@ def handle_stock_operations(args, config):
                 return 1
             
             print(f"Processing single symbol: {args.symbol}")
-            success = process_single_symbol(
+            success = main.process_single_symbol(
                 args.symbol, 
                 effective_config.data_file_path, 
                 effective_config
@@ -121,7 +120,7 @@ def handle_stock_operations(args, config):
         elif args.stock_mode == 'sync-all':
             print("Syncing all Nifty symbols...")
             csv_file = os.path.join("sources", effective_config.source_file)
-            success_count, error_count = sync_all_nifty_symbols(
+            success_count, error_count = main.sync_all_nifty_symbols(
                 effective_config.data_file_path, csv_file, effective_config
             )
             
@@ -132,7 +131,7 @@ def handle_stock_operations(args, config):
             
             print(f"Syncing single symbol: {args.symbol}")
             csv_file = os.path.join("sources", effective_config.source_file)
-            success = sync_single_symbol(
+            success = main.sync_single_symbol(
                 args.symbol, effective_config.data_file_path, csv_file, effective_config
             )
             return 0 if success else 1
@@ -140,7 +139,7 @@ def handle_stock_operations(args, config):
         elif args.stock_mode == 'cron-update':
             print("Running cron incremental update...")
             csv_file = os.path.join("sources", effective_config.source_file)
-            success_count, error_count = cron_incremental_update(
+            success_count, error_count = main.cron_incremental_update(
                 effective_config.data_file_path, csv_file, effective_config
             )
         
