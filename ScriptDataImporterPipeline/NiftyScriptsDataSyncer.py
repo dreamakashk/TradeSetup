@@ -8,7 +8,14 @@ import FileHandler
 def sync_nifty_scripts_data(data_dir, csv_file, db_table=None):
     symbols = FileHandler.read_nifty_symbols(csv_file)
     print(f"Total symbols: {len(symbols)}")
-    from PostgresWriter import upsert_stock_data
+    
+    # Only import PostgresWriter if database table is specified
+    if db_table:
+        try:
+            from PostgresWriter import upsert_stock_data
+        except ImportError as e:
+            print(f"Warning: Could not import PostgresWriter for database operations: {e}")
+            db_table = None
 
     for symbol in symbols:
         if FileHandler.check_symbol_file_exists(symbol, data_dir):
@@ -111,8 +118,11 @@ def sync_symbol_data(symbol, data_dir, db_table=None):
         updated_df.to_csv(csv_path, index=False)
         print(f"{symbol}: Appended {len(new_data)} new rows to CSV.")
         if db_table:
-            from PostgresWriter import upsert_stock_data
-            upsert_stock_data(new_data, db_table, symbol)
+            try:
+                from PostgresWriter import upsert_stock_data
+                upsert_stock_data(new_data, db_table, symbol)
+            except ImportError as e:
+                print(f"Warning: Could not import PostgresWriter for database operations: {e}")
     else:
         print(f"{symbol}: No new rows to append.")
 
@@ -120,8 +130,7 @@ def sync_symbol_data(symbol, data_dir, db_table=None):
         print(alert.strip())
 
 if __name__ == "__main__":
-    data_dir = r"/home/shared/Src/VSWorkspace/TraderSetup/TradeSetup/data"
-    # csv_file = os.path.join(os.path.dirname(__file__), "niftytotalmarket_list.csv")
-    csv_file = r"/home/shared/Src/VSWorkspace/TraderSetup/TradeSetup/sources/niftytotalmarket_list.csv"  # Update with your actual path
+    data_dir = "./data"
+    csv_file = os.path.join(os.path.dirname(__file__), "..", "sources", "niftytotalmarket_list.csv")
     db_table = "stock_prices"  # Change to your actual table name
-    sync_nifty_scripts_data(data_dir, csv_file, db_table=db_table)
+    sync_nifty_scripts_data(data_dir, csv_file, db_table=None)  # Disable database for now

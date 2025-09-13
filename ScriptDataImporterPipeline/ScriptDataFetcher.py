@@ -1,5 +1,6 @@
 import yfinance as yf
 import time
+import os
 
 def fetch_historical_data(symbol: str, exchange: str = "NS", retries: int = 3, delay: int = 60):
     """
@@ -20,7 +21,7 @@ def fetch_historical_data(symbol: str, exchange: str = "NS", retries: int = 3, d
                 raise
     raise Exception("Failed to fetch data after retries due to rate limiting.")
 
-def fetch_historical_data_from_date(symbol: str, exchange: str = "NS", start_date: str = None, end_date: str = None, retries: int = 3, delay: int = 60):
+def fetch_historical_data_from_date(symbol: str, start_date: str, exchange: str = "NS", end_date: str = None, retries: int = 3, delay: int = 60):
     """
     Fetch historical price and volume data for a given stock symbol from a specific start date.
     Dates should be in 'YYYY-MM-DD' format.
@@ -71,4 +72,15 @@ def fetch_company_info(symbol: str, exchange: str = "NS", retries: int = 3, dela
             else:
                 raise
     raise Exception("Failed to fetch company info after retries due to rate limiting.")
+
+
+def save_data_to_csv(data, symbol: str, directory: str):
+    """
+    Save the DataFrame to a CSV file in the specified directory.
+    """
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    filename = os.path.join(directory, f"{symbol}.csv")
+    data.to_csv(filename)
+    print(f"Data saved to {filename}")
 
