@@ -110,6 +110,67 @@ def check_symbol_file_exists(symbol, directory):
     # Check if file exists and return boolean result
     return os.path.exists(file_path)
 
+def append_data_to_csv(data, symbol, directory):
+    """
+    Append new stock data to an existing CSV file for a given symbol.
+    
+    This function is used for incremental updates where new data needs to be
+    added to an existing CSV file. It reads the existing file, concatenates
+    the new data, removes duplicates, and saves the updated dataset.
+    
+    Args:
+        data (pandas.DataFrame): New stock data to append
+        symbol (str): Stock symbol (e.g., 'RELIANCE')
+        directory (str): Directory path where CSV file is located
+    
+    Behavior:
+        - Reads existing CSV file
+        - Concatenates new data with existing data
+        - Removes duplicate dates (keeps latest values)
+        - Sorts by date in ascending order
+        - Saves updated data back to CSV file
+    
+    Raises:
+        FileNotFoundError: If the existing CSV file doesn't exist
+        pandas.errors.EmptyDataError: If the existing CSV file is empty or corrupted
+    """
+    import pandas as pd
+    
+    # Construct file path for the symbol
+    file_path = os.path.join(directory, f"{symbol}.csv")
+    
+    if not os.path.exists(file_path):
+        # If file doesn't exist, create it with the new data
+        save_data_to_csv(data, symbol, directory)
+        return
+    
+    try:
+        # Read existing CSV file
+        existing_data = pd.read_csv(file_path, index_col='Date', parse_dates=True)
+        
+        # Ensure new data has Date as index
+        if 'Date' in data.columns:
+            new_data = data.set_index('Date')
+        else:
+            new_data = data.copy()
+        
+        # Concatenate existing and new data
+        combined_data = pd.concat([existing_data, new_data])
+        
+        # Remove duplicates (keep last occurrence for same date)
+        combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
+        
+        # Sort by date
+        combined_data = combined_data.sort_index()
+        
+        # Save updated data back to CSV with explicit Date index
+        combined_data.to_csv(file_path, index_label='Date')
+        
+    except (pd.errors.EmptyDataError, pd.errors.ParserError):
+        # Handle corrupted or empty CSV files by overwriting with new data
+        print(f"Warning: Existing CSV file for {symbol} appears corrupted, overwriting...")
+        save_data_to_csv(data, symbol, directory)
+
 # def rename_ns_csv_files_to_csv(data_dir):
 #     """
 #     Renames all files in the data directory from 'SYMBOL.NS.csv' to 'SYMBOL.csv'.

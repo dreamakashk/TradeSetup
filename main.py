@@ -40,8 +40,8 @@ def main():
     """
     # Setup command line argument parser with available options
     parser = argparse.ArgumentParser(description='TradeSetup - Stock Market Data Pipeline')
-    parser.add_argument('--mode', choices=['single', 'sync-all', 'sync-symbol'], default='single',
-                       help='Mode: single stock, sync all Nifty stocks, or sync specific symbol')
+    parser.add_argument('--mode', choices=['single', 'sync-all', 'sync-symbol', 'cron-update'], default='single',
+                       help='Mode: single stock, sync all Nifty stocks, sync specific symbol, or cron incremental update')
     parser.add_argument('--symbol', default='BSE.NS', help='Stock symbol to fetch (default: BSE.NS)')
     parser.add_argument('--config', default='configs/config.json', help='Configuration file path')
     
@@ -140,6 +140,35 @@ def main():
                 print("Database integration: ENABLED - data will be updated in database")
             else:
                 print("Database integration: DISABLED - CSV-only mode")
+                
+        elif args.mode == 'cron-update':
+            # Cron update mode: Incremental updates for all stocks (designed for automation)
+            print("\nRunning incremental updates for all stocks (cron mode)...")
+            csv_file = os.path.join("sources", config.source_file)
+            if not os.path.exists(csv_file):
+                print(f"Error: Source file not found: {csv_file}")
+                return 1
+                
+            # Import the incremental update function
+            from NiftyScriptsDataSyncer import cron_incremental_update
+            
+            # Run incremental updates for all stocks
+            success_count, error_count = cron_incremental_update(config.data_file_path, csv_file, config)
+            
+            # Display execution summary
+            print("\nCron update completed!")
+            print(f"Successfully updated: {success_count} stocks")
+            print(f"Errors encountered: {error_count} stocks")
+            print(f"Source file: {config.source_file}")
+            print(f"Database integration: {'ENABLED' if config.db_enabled else 'DISABLED'}")
+            if config.db_enabled:
+                print(f"Database updates: {'ENABLED' if config.db_update_enabled else 'DISABLED'}")
+                print(f"Database logging: {'ENABLED' if config.db_logging_enabled else 'DISABLED'}")
+            
+            # Return non-zero exit code if there were errors (for cron monitoring)
+            if error_count > 0:
+                print(f"Warning: {error_count} stocks failed to update")
+                return 1
             
     except Exception as e:
         # Handle any unexpected errors during execution

@@ -241,6 +241,149 @@ def sync_symbol_data(symbol, data_dir, db_table=None):
     if alert:
         print(alert.strip())
 
+def cron_incremental_update(data_dir: str, csv_file: str, config):
+    """
+    Perform incremental updates for all stocks in the source file.
+    
+    This function is designed for cron job automation. It checks all stocks
+    from the source CSV file, finds the latest data available for each stock,
+    and fetches only new data from the latest date till today.
+    
+    Args:
+        data_dir (str): Directory path for CSV data files
+        csv_file (str): Path to source CSV file containing stock symbols
+        config (ConfigData): Configuration object with all settings
+    
+    Returns:
+        tuple: (success_count, error_count) - Number of successful and failed updates
+    
+    Behavior:
+        - For existing stocks: Finds latest date and fetches incremental data
+        - For new stocks: Fetches data from configured start_date
+        - Prioritizes database persistence for automated environments
+        - Handles errors gracefully to continue processing other stocks
+    """
+    from datetime import datetime, timedelta
+    
+    # Read all stock symbols from the source file
+    symbols = FileHandler.read_nifty_symbols(csv_file)
+    print(f"Processing {len(symbols)} stocks for incremental updates...")
+    
+    # Import database functions if available
+    try:
+        from PostgresWriter import upsert_stock_metadata, upsert_stock_price_data
+        db_available = True
+    except ImportError as e:
+        print(f"Warning: Database operations not available: {e}")
+        db_available = False
+    
+    use_database = config.db_enabled and config.db_update_enabled and db_available
+    
+    success_count = 0
+    error_count = 0
+    
+    if config.db_logging_enabled and use_database:
+        print("Database persistence: ENABLED")
+    else:
+        print("Database persistence: DISABLED")
+    
+    for i, symbol in enumerate(symbols, 1):
+        try:
+            print(f"[{i}/{len(symbols)}] Processing {symbol}...")
+            
+            # Check if CSV file exists for this symbol
+            csv_path = os.path.join(data_dir, f"{symbol}.csv")
+            
+            if os.path.exists(csv_path):
+                # Existing stock - find latest date and fetch incremental data
+                print(f"  Found existing data, checking for updates...")
+                
+                # Read existing CSV to find latest date
+                df = pd.read_csv(csv_path, parse_dates=["Date"])
+                if df.empty:
+                    # Empty file, fetch from start_date
+                    start_date = config.start_date
+                    print(f"  Empty file detected, fetching from {start_date}")
+                else:
+                    # Find latest date and fetch from next day
+                    latest_date = df["Date"].max()
+                    next_date = latest_date + timedelta(days=1)
+                    start_date = next_date.strftime('%Y-%m-%d')
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    
+                    if start_date > today:
+                        print(f"  Data is up to date (latest: {latest_date.strftime('%Y-%m-%d')})")
+                        success_count += 1
+                        continue
+                    
+                    print(f"  Fetching incremental data from {start_date}")
+                
+                # Fetch incremental data
+                new_data = ScriptDataFetcher.fetch_historical_data_from_date(symbol, start_date)
+                
+                if new_data is not None and not new_data.empty:
+                    # Append new data to existing CSV
+                    FileHandler.append_data_to_csv(new_data, symbol, data_dir)
+                    print(f"  ✓ Added {len(new_data)} new records to CSV")
+                    
+                    # Update database if enabled
+                    if use_database:
+                        try:
+                            # Get company info and update metadata
+                            company_info = ScriptDataFetcher.fetch_company_info(symbol)
+                            upsert_stock_metadata(config, symbol, company_info)
+                            
+                            # Reset index for database insertion
+                            data_for_db = new_data.reset_index()
+                            upsert_stock_price_data(config, data_for_db, symbol)
+                            
+                        except Exception as db_error:
+                            print(f"  Warning: Database update failed: {db_error}")
+                    
+                    success_count += 1
+                else:
+                    print(f"  No new data available")
+                    success_count += 1
+                    
+            else:
+                # New stock - fetch all data from start_date
+                print(f"  New stock, fetching data from {config.start_date}")
+                
+                # Fetch all historical data from configured start date
+                data = ScriptDataFetcher.fetch_historical_data(symbol, start_date=config.start_date)
+                
+                if data is not None and not data.empty:
+                    # Save data to CSV file
+                    FileHandler.save_data_to_csv(data, symbol, data_dir)
+                    print(f"  ✓ Saved {len(data)} records to new CSV file")
+                    
+                    # Save to database if enabled
+                    if use_database:
+                        try:
+                            # Get company info and save metadata
+                            company_info = ScriptDataFetcher.fetch_company_info(symbol)
+                            upsert_stock_metadata(config, symbol, company_info)
+                            
+                            # Reset index for database insertion
+                            data_for_db = data.reset_index()
+                            upsert_stock_price_data(config, data_for_db, symbol)
+                            
+                        except Exception as db_error:
+                            print(f"  Warning: Database update failed: {db_error}")
+                    
+                    success_count += 1
+                else:
+                    print(f"  ❌ No data found for {symbol}")
+                    error_count += 1
+                    
+        except Exception as e:
+            print(f"  ❌ Error processing {symbol}: {e}")
+            error_count += 1
+            # Continue with next symbol
+            continue
+    
+    return success_count, error_count
+
 if __name__ == "__main__":
     data_dir = "./data"
     # Import configuration to get the source file
