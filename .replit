@@ -17,15 +17,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Data Pipeline"
+args = "TradeSetup Pipeline"
 
 [[workflows.workflow]]
-name = "Data Pipeline"
+name = "TradeSetup Pipeline"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python main.py --mode single --symbol BSE.NS"
+args = "python pipeline.py stock cron-update"
 
 [workflows.workflow.metadata]
 outputType = "console"

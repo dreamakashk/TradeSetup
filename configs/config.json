@@ -12,5 +12,41 @@
         "user": "postgres",
         "password": "password",
         "use_env_vars": true
+    },
+    "stock_filter": {
+        "enabled": false,
+        "symbols": [],
+        "exclude_symbols": [],
+        "sector_filter": [],
+        "market_cap_min": null,
+        "market_cap_max": null
+    },
+    "date_range": {
+        "enabled": false,
+        "start_date": null,
+        "end_date": null,
+        "use_relative_dates": false,
+        "days_back": 365
+    },
+    "pipeline_settings": {
+        "batch_size": 50,
+        "max_retries": 3,
+        "retry_delay": 5,
+        "parallel_processing": false,
+        "max_workers": 4
+    },
+    "cron_settings": {
+        "stock_pipeline": {
+            "enabled": true,
+            "schedule": "0 19 * * 1-5",
+            "mode": "cron-update",
+            "timeout": 3600
+        },
+        "indicators_pipeline": {
+            "enabled": true,
+            "schedule": "30 19 * * 1-5",
+            "mode": "update-all",
+            "timeout": 1800
+        }
     }
 }
