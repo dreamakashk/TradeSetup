@@ -21,6 +21,7 @@ from datetime import datetime
 sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptDataImporterPipeline'))
 
 import ScriptDataFetcher
+import FileHandler
 from ConfigReader import read_config
 from NiftyScriptsDataSyncer import sync_nifty_scripts_data, sync_symbol_data
 
@@ -69,6 +70,25 @@ def main():
     # Ensure data directory exists, create if necessary
     os.makedirs(config.data_file_path, exist_ok=True)
     
+    # Initialize database schema if enabled
+    if config.db_enabled:
+        try:
+            from DatabaseSetup import setup_database_schema, verify_schema
+            print("Database enabled - verifying schema...")
+            if not verify_schema(config):
+                print("Schema verification failed - initializing database...")
+                if setup_database_schema(config):
+                    print("✅ Database schema initialized successfully")
+                else:
+                    print("❌ Database schema initialization failed - continuing in CSV-only mode")
+                    config.db_enabled = False
+            else:
+                print("✅ Database schema verified")
+        except Exception as db_error:
+            print(f"Database setup error: {db_error}")
+            print("Continuing in CSV-only mode...")
+            config.db_enabled = False
+    
     try:
         # Execute the appropriate operation based on the selected mode
         if args.mode == 'single':
@@ -88,8 +108,8 @@ def main():
             print(f"Data shape: {data.shape}")
             print(f"Date range: {data.index.min()} to {data.index.max()}")
             
-            # Save the fetched data to CSV file
-            ScriptDataFetcher.save_data_to_csv(data, args.symbol, config.data_file_path)
+            # Save the fetched data to CSV file using consistent FileHandler
+            FileHandler.save_data_to_csv(data, args.symbol, config.data_file_path)
             print(f"Data saved successfully!")
             
         elif args.mode == 'sync-all':
@@ -100,14 +120,26 @@ def main():
                 print(f"Error: Nifty symbols file not found: {csv_file}")
                 return 1
             # Process all symbols from the Nifty total market list
-            # Database operations disabled (db_table=None) for CSV-only mode
+            # Database operations controlled by configuration
             sync_nifty_scripts_data(config.data_file_path, csv_file, db_table=None)
+            
+            # Display database status
+            if config.db_enabled:
+                print("Database integration: ENABLED")
+            else:
+                print("Database integration: DISABLED (CSV-only mode)")
             
         elif args.mode == 'sync-symbol':
             # Sync symbol mode: Update existing CSV with latest data for specific symbol
             print(f"\nSyncing data for symbol: {args.symbol}")
             # This mode appends new data to existing CSV files without full redownload
             sync_symbol_data(args.symbol, config.data_file_path, db_table=None)
+            
+            # Display database status
+            if config.db_enabled:
+                print("Database integration: ENABLED - data will be updated in database")
+            else:
+                print("Database integration: DISABLED - CSV-only mode")
             
     except Exception as e:
         # Handle any unexpected errors during execution

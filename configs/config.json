@@ -1,3 +1,12 @@
 {
-    "data_file_path": "./data"
+    "data_file_path": "./data",
+    "database": {
+        "enabled": false,
+        "host": "localhost",
+        "port": 5432,
+        "database": "tradesetup",
+        "user": "postgres",
+        "password": "password",
+        "use_env_vars": true
+    }
 }

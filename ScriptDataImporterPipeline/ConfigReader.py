@@ -16,26 +16,62 @@ Created: 2025-09-13
 """
 
 import json  # For parsing JSON configuration files
+from typing import Optional  # For type hints with optional values
 
 class ConfigData:
     """
     Container class for application configuration data.
     
     This class holds configuration parameters loaded from the JSON config file.
-    Currently stores the data file path, but can be extended for additional
-    configuration options like database settings, API keys, etc.
+    Stores data file path and database configuration settings.
     
     Attributes:
         data_file_path (str): Directory path where CSV data files are stored
+        db_enabled (bool): Whether database operations are enabled
+        db_config (dict): Database connection configuration
     """
-    def __init__(self, data_file_path: str):
+    def __init__(self, data_file_path: str, db_config: Optional[dict] = None):
         """
-        Initialize ConfigData with the data file path.
+        Initialize ConfigData with file path and database configuration.
         
         Args:
             data_file_path (str): Path to directory for storing CSV files
+            db_config (dict): Database configuration parameters
         """
         self.data_file_path = data_file_path
+        self.db_config = db_config or {}
+        self.db_enabled = self.db_config.get('enabled', False)
+    
+    def get_db_connection_params(self):
+        """
+        Get database connection parameters, preferring environment variables.
+        
+        Returns:
+            dict: Database connection parameters for psycopg2
+        """
+        if not self.db_enabled:
+            return None
+        
+        import os
+        
+        if self.db_config.get('use_env_vars', True):
+            # Use Replit database environment variables if available
+            return {
+                'host': os.environ.get('PGHOST', self.db_config.get('host', 'localhost')),
+                'port': int(os.environ.get('PGPORT', self.db_config.get('port', 5432))),
+                'database': os.environ.get('PGDATABASE', self.db_config.get('database', 'tradesetup')),
+                'user': os.environ.get('PGUSER', self.db_config.get('user', 'postgres')),
+                'password': os.environ.get('PGPASSWORD', self.db_config.get('password', ''))
+            }
+        else:
+            # Use configuration file values directly
+            return {
+                'host': self.db_config.get('host', 'localhost'),
+                'port': self.db_config.get('port', 5432),
+                'database': self.db_config.get('database', 'tradesetup'),
+                'user': self.db_config.get('user', 'postgres'),
+                'password': self.db_config.get('password', '')
+            }
 
 def read_config(config_path: str) -> ConfigData:
     """
@@ -62,5 +98,8 @@ def read_config(config_path: str) -> ConfigData:
     # Extract data file path with empty string as default
     data_file_path = config_json.get("data_file_path", "")
     
+    # Extract database configuration
+    db_config = config_json.get("database", {})
+    
     # Create and return ConfigData object with parsed values
-    return ConfigData(data_file_path)
+    return ConfigData(data_file_path, db_config)

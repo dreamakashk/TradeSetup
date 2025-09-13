@@ -48,15 +48,22 @@ def sync_nifty_scripts_data(data_dir, csv_file, db_table=None):
     symbols = FileHandler.read_nifty_symbols(csv_file)
     print(f"Total symbols: {len(symbols)}")
     
-    # Only import PostgresWriter if database table is specified
+    # Import database functions if available
     # This lazy import prevents errors when database dependencies are missing
-    if db_table:
-        try:
-            from PostgresWriter import upsert_stock_data
-        except ImportError as e:
-            print(f"Warning: Could not import PostgresWriter for database operations: {e}")
-            # Disable database operations if import fails
-            db_table = None
+    try:
+        from PostgresWriter import upsert_stock_metadata, upsert_stock_price_data
+        db_available = True
+    except ImportError as e:
+        print(f"Warning: Could not import PostgresWriter for database operations: {e}")
+        db_available = False
+        
+    # Import configuration reader to get database settings
+    from ConfigReader import read_config
+    import os
+    config_path = os.path.join(os.path.dirname(__file__), "..", "configs", "config.json")
+    config = read_config(config_path)
+    
+    use_database = config.db_enabled and db_available
 
     # Process each symbol in the Nifty universe
     for symbol in symbols:
@@ -74,11 +81,24 @@ def sync_nifty_scripts_data(data_dir, csv_file, db_table=None):
                     # Save data to CSV file
                     FileHandler.save_data_to_csv(data, symbol, data_dir)
                     
-                    # Optionally save to database if configured
-                    if db_table:
-                        # Reset index to ensure 'Date' is a column for database
-                        data = data.reset_index()
-                        upsert_stock_data(data, db_table, symbol)
+                    # Save to database if enabled and available
+                    if use_database:
+                        try:
+                            # First, get company information for metadata
+                            company_info = ScriptDataFetcher.fetch_company_info(symbol)
+                            
+                            # Insert/update stock metadata
+                            upsert_stock_metadata(config, symbol, company_info)
+                            
+                            # Reset index to ensure 'Date' is a column for database
+                            data_for_db = data.reset_index()
+                            
+                            # Insert/update stock price data
+                            upsert_stock_price_data(config, data_for_db, symbol)
+                            
+                        except Exception as db_error:
+                            print(f"Database operation failed for {symbol}: {db_error}")
+                            print("Continuing with CSV-only mode for this symbol...")
                 else:
                     print(f"No data found for {symbol}")
             except Exception as e:
