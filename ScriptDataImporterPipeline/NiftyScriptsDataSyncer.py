@@ -74,8 +74,8 @@ def sync_nifty_scripts_data(data_dir, csv_file, db_table=None):
             # Download historical data for new symbols
             print(f"downloading: {symbol}")
             try:
-                # Fetch all available historical data
-                data = ScriptDataFetcher.fetch_historical_data(symbol)
+                # Fetch historical data from configured start date
+                data = ScriptDataFetcher.fetch_historical_data(symbol, start_date=config.start_date)
                 
                 if data is not None and not data.empty:
                     # Save data to CSV file
@@ -243,6 +243,11 @@ def sync_symbol_data(symbol, data_dir, db_table=None):
 
 if __name__ == "__main__":
     data_dir = "./data"
-    csv_file = os.path.join(os.path.dirname(__file__), "..", "sources", "niftytotalmarket_list.csv")
+    # Import configuration to get the source file
+    from ConfigReader import read_config
+    import os
+    config_path = os.path.join(os.path.dirname(__file__), "..", "configs", "config.json")
+    config = read_config(config_path)
+    csv_file = os.path.join(os.path.dirname(__file__), "..", "sources", config.source_file)
     db_table = "stock_prices"  # Change to your actual table name
     sync_nifty_scripts_data(data_dir, csv_file, db_table=None)  # Disable database for now

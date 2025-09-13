@@ -1,7 +1,11 @@
 {
     "data_file_path": "./data",
+    "source_file": "niftytotalmarket_list.csv",
+    "start_date": "2020-01-01",
     "database": {
         "enabled": false,
+        "update_enabled": true,
+        "logging_enabled": true,
         "host": "localhost",
         "port": 5432,
         "database": "tradesetup",

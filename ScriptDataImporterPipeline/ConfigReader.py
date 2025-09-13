@@ -23,24 +23,35 @@ class ConfigData:
     Container class for application configuration data.
     
     This class holds configuration parameters loaded from the JSON config file.
-    Stores data file path and database configuration settings.
+    Stores data file path, source file, start date, and database configuration settings.
     
     Attributes:
         data_file_path (str): Directory path where CSV data files are stored
+        source_file (str): Source file name for stock symbols list
+        start_date (str): Start date for historical data fetching (YYYY-MM-DD)
         db_enabled (bool): Whether database operations are enabled
+        db_update_enabled (bool): Whether database updates are enabled
+        db_logging_enabled (bool): Whether database logging is enabled
         db_config (dict): Database connection configuration
     """
-    def __init__(self, data_file_path: str, db_config: Optional[dict] = None):
+    def __init__(self, data_file_path: str, source_file: str = "niftytotalmarket_list.csv", 
+                 start_date: str = "2020-01-01", db_config: Optional[dict] = None):
         """
-        Initialize ConfigData with file path and database configuration.
+        Initialize ConfigData with file path, source file, start date, and database configuration.
         
         Args:
             data_file_path (str): Path to directory for storing CSV files
+            source_file (str): Source file name for stock symbols list
+            start_date (str): Start date for historical data fetching (YYYY-MM-DD)
             db_config (dict): Database configuration parameters
         """
         self.data_file_path = data_file_path
+        self.source_file = source_file
+        self.start_date = start_date
         self.db_config = db_config or {}
         self.db_enabled = self.db_config.get('enabled', False)
+        self.db_update_enabled = self.db_config.get('update_enabled', True)
+        self.db_logging_enabled = self.db_config.get('logging_enabled', True)
     
     def get_db_connection_params(self):
         """
@@ -95,11 +106,17 @@ def read_config(config_path: str) -> ConfigData:
     with open(config_path, 'r') as f:
         config_json = json.load(f)
     
-    # Extract data file path with empty string as default
-    data_file_path = config_json.get("data_file_path", "")
+    # Extract data file path with default value
+    data_file_path = config_json.get("data_file_path", "./data")
+    
+    # Extract source file with default value
+    source_file = config_json.get("source_file", "niftytotalmarket_list.csv")
+    
+    # Extract start date with default value
+    start_date = config_json.get("start_date", "2020-01-01")
     
     # Extract database configuration
     db_config = config_json.get("database", {})
     
     # Create and return ConfigData object with parsed values
-    return ConfigData(data_file_path, db_config)
+    return ConfigData(data_file_path, source_file, start_date, db_config)

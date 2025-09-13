@@ -71,8 +71,17 @@ def upsert_stock_metadata(config_data, symbol: str, company_info: dict):
     # Remove .NS suffix for database storage (keep base symbol)
     clean_symbol = symbol.replace('.NS', '').replace('.BO', '')
     
+    # Check if database updates are enabled
+    if not config_data.db_update_enabled:
+        if config_data.db_logging_enabled:
+            print(f"Database updates disabled - skipping stock metadata for {symbol}")
+        return
+    
     conn = get_connection(config_data)
     cur = conn.cursor()
+    
+    if config_data.db_logging_enabled:
+        print(f"Updating stock metadata for symbol: {symbol}")
     
     try:
         # Upsert stock metadata
@@ -93,7 +102,11 @@ def upsert_stock_metadata(config_data, symbol: str, company_info: dict):
         ))
         
         conn.commit()
-        print(f"Updated stock metadata for {clean_symbol}")
+        if config_data.db_logging_enabled:
+            print(f"✓ Successfully inserted/updated stock metadata for {clean_symbol}")
+            print(f"  Company: {company_info.get('long_name', 'N/A')}")
+            print(f"  Sector: {company_info.get('sector', 'N/A')}")
+            print(f"  Industry: {company_info.get('industry', 'N/A')}")
         
     except Exception as e:
         conn.rollback()
@@ -137,9 +150,19 @@ def upsert_stock_price_data(config_data, df: pd.DataFrame, symbol: str):
     if not config_data.db_enabled:
         return
     
-    if df.empty:
-        print(f"No data to insert for {symbol}")
+    # Check if database updates are enabled
+    if not config_data.db_update_enabled:
+        if config_data.db_logging_enabled:
+            print(f"Database updates disabled - skipping price data for {symbol}")
         return
+    
+    if df.empty:
+        if config_data.db_logging_enabled:
+            print(f"No data to insert for {symbol}")
+        return
+    
+    if config_data.db_logging_enabled:
+        print(f"Inserting {len(df)} price records for symbol: {symbol}")
     
     # Remove .NS suffix for database storage (keep base symbol)
     clean_symbol = symbol.replace('.NS', '').replace('.BO', '')
@@ -193,7 +216,29 @@ def upsert_stock_price_data(config_data, df: pd.DataFrame, symbol: str):
         # Commit all changes as a single transaction
         conn.commit()
         rows_affected = cur.rowcount if cur.rowcount > 0 else len(df)
-        print(f"Successfully batch-upserted {rows_affected} rows for {clean_symbol} in stock_price_daily table")
+        if config_data.db_logging_enabled:
+            print(f"✓ Successfully batch-upserted {rows_affected} rows for {clean_symbol} in stock_price_daily table")
+            try:
+                # Handle date range logging safely for both DataFrame with Date column and DatetimeIndex
+                if 'Date' in df.columns:
+                    # DataFrame with Date column (after reset_index())
+                    date_series = pd.to_datetime(df['Date'])
+                    start_date = date_series.min().strftime('%Y-%m-%d')
+                    end_date = date_series.max().strftime('%Y-%m-%d')
+                elif isinstance(df.index, pd.DatetimeIndex):
+                    # DataFrame with DatetimeIndex
+                    start_date = df.index.min().strftime('%Y-%m-%d')
+                    end_date = df.index.max().strftime('%Y-%m-%d')
+                else:
+                    # Fallback for other index types
+                    start_date = "Unknown"
+                    end_date = "Unknown"
+                
+                print(f"  Date range: {start_date} to {end_date}")
+                print(f"  Last close price: ${df['Close'].iloc[-1]:.2f}")
+            except Exception as log_error:
+                # Don't let logging errors affect database operations
+                print(f"  (Date range logging failed: {log_error})")
         
     except Exception as e:
         conn.rollback()

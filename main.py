@@ -104,7 +104,7 @@ def main():
             
             # Fetch all available historical price and volume data
             print("Fetching historical data...")
-            data = ScriptDataFetcher.fetch_historical_data(args.symbol)
+            data = ScriptDataFetcher.fetch_historical_data(args.symbol, start_date=config.start_date)
             print(f"Data shape: {data.shape}")
             print(f"Date range: {data.index.min()} to {data.index.max()}")
             
@@ -115,7 +115,7 @@ def main():
         elif args.mode == 'sync-all':
             # Sync all mode: Download/update data for all stocks in Nifty universe
             print("\nSyncing all Nifty stocks...")
-            csv_file = os.path.join("sources", "niftytotalmarket_list.csv")
+            csv_file = os.path.join("sources", config.source_file)
             if not os.path.exists(csv_file):
                 print(f"Error: Nifty symbols file not found: {csv_file}")
                 return 1

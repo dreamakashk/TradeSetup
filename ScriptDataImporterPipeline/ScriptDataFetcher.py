@@ -19,7 +19,7 @@ import yfinance as yf  # Yahoo Finance API library for stock data
 import time           # For sleep delays during rate limiting
 import os            # For file and directory operations
 
-def fetch_historical_data(symbol: str, exchange: str = "NS", retries: int = 3, delay: int = 60):
+def fetch_historical_data(symbol: str, exchange: str = "NS", start_date: str = None, retries: int = 3, delay: int = 60):
     """
     Fetch all available historical price and volume data for a given stock symbol.
     
@@ -49,9 +49,14 @@ def fetch_historical_data(symbol: str, exchange: str = "NS", retries: int = 3, d
     # Attempt to fetch data with retry logic for rate limiting
     for attempt in range(retries):
         try:
-            # Create yfinance Ticker object and fetch maximum available history
+            # Create yfinance Ticker object and fetch historical data
             ticker = yf.Ticker(full_symbol)
-            hist = ticker.history(period="max")
+            if start_date:
+                # Fetch data from specific start date
+                hist = ticker.history(start=start_date)
+            else:
+                # Fetch maximum available history
+                hist = ticker.history(period="max")
             return hist
         except Exception as e:
             # Handle rate limiting specifically
