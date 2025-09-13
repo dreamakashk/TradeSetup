@@ -1,44 +1,112 @@
-import time
-import os
-import pandas as pd
-from datetime import datetime
-import ScriptDataFetcher  # Assuming ScriptDataFetcher.py is in the same directory or in PYTHONPATH
-import FileHandler
+"""
+NiftyScriptsDataSyncer - Bulk Stock Data Synchronization Module
+
+This module handles bulk synchronization operations for stock market data,
+including downloading data for all Nifty stocks and updating existing datasets.
+Provides functions for both initial data download and incremental updates.
+
+Functions:
+    sync_nifty_scripts_data: Download/update data for all Nifty stocks
+    fetch_multiple_historical_data: Batch download with rate limit handling
+    sync_symbol_data: Update existing CSV with latest data for specific symbol
+
+Author: TradeSetup Team
+Created: 2025-09-13
+"""
+
+import time                # For sleep delays during rate limiting
+import os                 # For file and directory operations
+import pandas as pd       # For DataFrame operations and data processing
+from datetime import datetime  # For date calculations and formatting
+import ScriptDataFetcher  # Custom module for fetching stock data via yfinance
+import FileHandler       # Custom module for file operations
 
 def sync_nifty_scripts_data(data_dir, csv_file, db_table=None):
+    """
+    Download and synchronize data for all stocks in the Nifty universe.
+    
+    Processes all stock symbols from the Nifty total market list CSV file,
+    checking for existing data files and downloading missing ones. Optionally
+    saves data to database if table name is provided.
+    
+    Args:
+        data_dir (str): Directory path for storing CSV files
+        csv_file (str): Path to Nifty symbols CSV file
+        db_table (str, optional): Database table name for storing data.
+                                 If None, only CSV files are created
+    
+    Returns:
+        None
+    
+    Side Effects:
+        - Downloads historical data for missing symbols
+        - Creates CSV files in data_dir
+        - Optionally inserts data into database table
+        - Prints progress messages for each symbol
+    """
+    # Read all stock symbols from the Nifty CSV file
     symbols = FileHandler.read_nifty_symbols(csv_file)
     print(f"Total symbols: {len(symbols)}")
     
     # Only import PostgresWriter if database table is specified
+    # This lazy import prevents errors when database dependencies are missing
     if db_table:
         try:
             from PostgresWriter import upsert_stock_data
         except ImportError as e:
             print(f"Warning: Could not import PostgresWriter for database operations: {e}")
+            # Disable database operations if import fails
             db_table = None
 
+    # Process each symbol in the Nifty universe
     for symbol in symbols:
+        # Check if data file already exists to avoid re-downloading
         if FileHandler.check_symbol_file_exists(symbol, data_dir):
             print(f"exists: {symbol}")
         else:
+            # Download historical data for new symbols
             print(f"downloading: {symbol}")
             try:
+                # Fetch all available historical data
                 data = ScriptDataFetcher.fetch_historical_data(symbol)
+                
                 if data is not None and not data.empty:
+                    # Save data to CSV file
                     FileHandler.save_data_to_csv(data, symbol, data_dir)
+                    
+                    # Optionally save to database if configured
                     if db_table:
-                        # Reset index to ensure 'Date' is a column
+                        # Reset index to ensure 'Date' is a column for database
                         data = data.reset_index()
                         upsert_stock_data(data, db_table, symbol)
                 else:
                     print(f"No data found for {symbol}")
             except Exception as e:
+                # Continue processing other symbols even if one fails
                 print(f"Failed to fetch data for {symbol}: {e}")
 
 
 def fetch_multiple_historical_data(symbols, directory, retries=3, delay=60):
     """
-    Fetch and save historical data for multiple stock symbols, handling rate limits.
+    Fetch and save historical data for multiple stock symbols with rate limit handling.
+    
+    This function processes a list of stock symbols and downloads their historical
+    data with built-in retry logic for handling API rate limits. It's an alternative
+    to sync_nifty_scripts_data for custom symbol lists.
+    
+    Args:
+        symbols (list[str]): List of stock symbols to process
+        directory (str): Target directory for saving CSV files
+        retries (int): Number of retry attempts per symbol (default: 3)
+        delay (int): Delay in seconds between retries (default: 60)
+    
+    Returns:
+        None
+    
+    Side Effects:
+        - Downloads historical data for each symbol
+        - Creates CSV files in the specified directory
+        - Handles rate limiting with automatic retries
     """
     for symbol in symbols:
         for attempt in range(retries):
@@ -60,7 +128,31 @@ def fetch_multiple_historical_data(symbols, directory, retries=3, delay=60):
 
 def sync_symbol_data(symbol, data_dir, db_table=None):
     """
-    Update the CSV for the given symbol in data_dir with the latest historical data.
+    Update existing CSV file with the latest historical data for a specific symbol.
+    
+    This function performs incremental updates by reading the existing CSV file,
+    determining the latest date, and fetching only new data from that point forward.
+    It includes data validation to detect discrepancies between existing and new data.
+    
+    Args:
+        symbol (str): Stock symbol to update (e.g., 'RELIANCE')
+        data_dir (str): Directory containing the existing CSV file
+        db_table (str, optional): Database table name for storing updates.
+                                 If None, only CSV file is updated
+    
+    Returns:
+        None
+    
+    Side Effects:
+        - Updates existing CSV file with new data
+        - Optionally updates database table
+        - Prints alerts for data discrepancies
+        - Creates backup before modifications
+    
+    Notes:
+        - Requires existing CSV file for the symbol
+        - Performs data validation between old and new data
+        - Handles date format conversions automatically
     """
     csv_path = os.path.join(data_dir, f"{symbol}.csv")
     if not os.path.exists(csv_path):
