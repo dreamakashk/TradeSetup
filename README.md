@@ -408,3 +408,10 @@ For issues, questions, or contributions:
 - Create an issue on GitHub
 - Check the troubleshooting section above
 - Review log files for specific error messages
+
+## Key Notes
+Nifty full market list is available at https://niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv 
+
+
+To make yFinance library working smoothly
+- Install !pip install yfinance --upgrade --no-cache-dir
